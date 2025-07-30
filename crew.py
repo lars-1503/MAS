@@ -175,12 +175,16 @@ github_issue_crew = Crew(
 )
 
 user_story_input = """
-"**Als** Entwickler/Architekt des Spring-Boot-Backends  \n"
-    "**möchte ich** die bisherige lokale Benutzer datenbank (E-Mail & Passwort) durch Keycloak als zentrales "
-                  "Identity- und Access-Management ersetzen,  \n"
-    "**damit** wir eine standardisierte, sichere Single-Sign-On-Lösung haben und zukünftige "
-                  "Authentifizierungs-Anforderungen einfacher integrieren können. Alles in spring boot.\n"
-    "\n"
+As an administrator,
+I want the user entity to include a date of birth and occupation field,
+so that I can store and view additional personal information about each user.
+
+Acceptance Criteria:
+
+The user model includes a dateOfBirth field (date format, e.g., yyyy-MM-dd).
+The user model includes an occupation field (string).
+Both fields are displayed when retrieving user details via API.
+It is possible to set both fields when creating or updating a user.
 """
 
 
@@ -195,7 +199,7 @@ def save_output_to_file(filename, content):
     except Exception as e:
         print(f"\nFehler beim Speichern der Datei: {e}")
 
-save_output_to_file("output/final_kickoff_result.txt", str(result))
+save_output_to_file("output/final_kickoff_result1.md", str(result))
 
 
 

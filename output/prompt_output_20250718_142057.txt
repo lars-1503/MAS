@@ -1,0 +1,64 @@
+Akzeptanzkriterien für das Anmeldeformular (HTML-only):
+
+**Szenario 1: Anzeige der grundlegenden Formularstruktur**
+*   **Gegeben sei** die Webseite, die das Anmeldeformular enthält.
+*   **Wenn** die Webseite im Browser geladen wird.
+*   **Dann** soll ein `<form>`-Element sichtbar sein.
+*   **Und** das `<form>`-Element soll das Attribut `action="/login-process"` aufweisen.
+*   **Und** das `<form>`-Element soll das Attribut `method="post"` aufweisen.
+*   **Und** das Formular soll ein `<label>`-Element mit dem Text "Benutzername:" enthalten.
+*   **Und** das `<label>`-Element für den Benutzernamen soll über das `for`-Attribut korrekt mit einem `<input type="text">` Element mit `id="username"` und `name="username"` assoziiert sein.
+*   **Und** das `<input type="text">` Element für den Benutzernamen soll das Attribut `required` aufweisen.
+*   **Und** das Formular soll ein `<label>`-Element mit dem Text "Passwort:" enthalten.
+*   **Und** das `<label>`-Element für das Passwort soll über das `for`-Attribut korrekt mit einem `<input type="password">` Element mit `id="password"` und `name="password"` assoziiert sein.
+*   **Und** das `<input type="password">` Element für das Passwort soll das Attribut `required` aufweisen.
+*   **Und** das Formular soll einen `<button type="submit">` mit dem Text "Anmelden" enthalten.
+
+**Szenario 2: Erfolgreiche Formularübermittlung mit gültigen, aber leeren Feldern (simuliert, da keine Validierung)**
+*   **Gegeben sei** die Webseite mit dem Anmeldeformular.
+*   **Wenn** der Benutzer im Feld "Benutzername" einen Wert (z.B. "testuser") eingibt.
+*   **Und** der Benutzer im Feld "Passwort" einen Wert (z.B. "password123") eingibt.
+*   **Und** der Benutzer auf den "Anmelden"-Button klickt.
+*   **Dann** soll der Browser versuchen, die Formulardaten an die URL "/login-process" zu übermitteln.
+*   **Und** die Übermittlung soll die Daten im `POST`-Format senden.
+
+**Szenario 3: Fehlerfall - Leeres Pflichtfeld (Benutzername) vor Übermittlung (Browser-Validierung)**
+*   **Gegeben sei** die Webseite mit dem Anmeldeformular.
+*   **Wenn** der Benutzer das Feld "Passwort" mit einem Wert füllt.
+*   **Und** der Benutzer das Feld "Benutzername" leer lässt.
+*   **Und** der Benutzer auf den "Anmelden"-Button klickt.
+*   **Dann** soll die browserinterne Validierung (durch das `required`-Attribut) die Formularübermittlung verhindern.
+*   **Und** der Browser soll eine visuelle Anzeige (vom Browser generiert) auf das fehlende Pflichtfeld hinweisen.
+
+**Szenario 4: Fehlerfall - Leeres Pflichtfeld (Passwort) vor Übermittlung (Browser-Validierung)**
+*   **Gegeben sei** die Webseite mit dem Anmeldeformular.
+*   **Wenn** der Benutzer das Feld "Benutzername" mit einem Wert füllt.
+*   **Und** der Benutzer das Feld "Passwort" leer lässt.
+*   **Und** der Benutzer auf den "Anmelden"-Button klickt.
+*   **Dann** soll die browserinterne Validierung (durch das `required`-Attribut) die Formularübermittlung verhindern.
+*   **Und** der Browser soll eine visuelle Anzeige (vom Browser generiert) auf das fehlende Pflichtfeld hinweisen.
+
+**Szenario 5: Fehlerfall - Alle Pflichtfelder leer vor Übermittlung (Browser-Validierung)**
+*   **Gegeben sei** die Webseite mit dem Anmeldeformular.
+*   **Wenn** der Benutzer das Feld "Benutzername" leer lässt.
+*   **Und** der Benutzer das Feld "Passwort" leer lässt.
+*   **Und** der Benutzer auf den "Anmelden"-Button klickt.
+*   **Dann** soll die browserinterne Validierung (durch das `required`-Attribut) die Formularübermittlung verhindern.
+*   **Und** der Browser soll eine visuelle Anzeige (vom Browser generiert) auf die fehlenden Pflichtfelder hinweisen.
+
+**Szenario 6: Fehlerfall - Fehlendes oder falsches `action`-Attribut im `<form>`-Element**
+*   **Gegeben sei** die Webseite mit dem Anmeldeformular, bei dem das `<form>`-Element das `action`-Attribut nicht oder falsch gesetzt hat (z.B. `action=""` oder `action="/falscher-pfad"`).
+*   **Wenn** der Benutzer gültige Daten eingibt und auf den "Anmelden"-Button klickt.
+*   **Dann** soll die Datenübermittlung fehlschlagen oder an die falsche Ziel-URL erfolgen, da das `action`-Attribut nicht korrekt konfiguriert ist.
+
+**Szenario 7: Fehlerfall - Fehlendes oder falsches `method`-Attribut im `<form>`-Element**
+*   **Gegeben sei** die Webseite mit dem Anmeldeformular, bei dem das `<form>`-Element das `method`-Attribut nicht oder falsch gesetzt hat (z.B. `method="get"` anstelle von `method="post"`).
+*   **Wenn** der Benutzer gültige Daten eingibt und auf den "Anmelden"-Button klickt.
+*   **Dann** soll die Datenübermittlung die falsche HTTP-Methode verwenden (z.B. GET statt POST), was eine Fehlkonfiguration für sensible Daten darstellt.
+
+**Szenario 8: Fehlerfall - Fehlende oder falsche Verknüpfung von Label und Input-Feld**
+*   **Gegeben sei** die Webseite mit dem Anmeldeformular.
+*   **Wenn** der Benutzer versucht, auf das `<label>`-Element für "Benutzername" zu klicken.
+*   **Dann** soll das zugehörige `<input type="text">`-Feld keinen Fokus erhalten, falls das `for`-Attribut des Labels nicht mit der `id` des Inputs übereinstimmt oder fehlt.
+*   **Wenn** der Benutzer versucht, auf das `<label>`-Element für "Passwort" zu klicken.
+*   **Dann** soll das zugehörige `<input type="password">`-Feld keinen Fokus erhalten, falls das `for`-Attribut des Labels nicht mit der `id` des Inputs übereinstimmt oder fehlt.

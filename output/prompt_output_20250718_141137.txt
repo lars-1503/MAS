@@ -1,0 +1,143 @@
+# Prompt für die Erstellung eines einfachen HTML-Login-Formulars
+
+## 1. User Story
+
+**Titel:** Einfaches HTML-Login-Formular zur Benutzerauthentifizierung
+
+**Beschreibung:**
+Als **Nutzer** der Webanwendung möchte ich mich über ein **einfaches Anmeldefeld auf der Webseite** registrieren können, damit ich die Kernfunktionen der Anwendung nutzen kann.
+
+## 2. Kontext
+
+*   **Geschäftlicher Kontext:**
+    *   Das Anmeldefeld ist für das grundlegende Zugangsmanagement der Anwendung bestimmt.
+    *   Ziel ist die Autorisierung von Nutzern für personalisierte Inhalte oder Funktionen.
+    *   Die strikte Anforderung, *ausschließlich* einfaches HTML zu verwenden (keine Frameworks, kein CSS), zielt auf minimale Client-seitige Komplexität ab, was für bestimmte Umgebungen oder Legacy-Systeme relevant sein kann. Dies birgt jedoch erhebliche Einschränkungen hinsichtlich Usability, Barrierefreiheit und moderner Sicherheitsstandards im Vergleich zu dynamischeren Implementierungen.
+
+*   **Technischer Kontext & Architektur:**
+    *   **Client-Seite:** Implementierung erfolgt rein in HTML5. Keine clientseitigen JavaScript-Frameworks (React, Vue, Angular etc.) oder Styling-Bibliotheken (Bootstrap, Tailwind CSS etc.) sind erlaubt.
+    *   **Server-Seite:** Eine Backend-Anwendung (Technologie nicht spezifiziert, z.B. Node.js, Python, Java, PHP) ist für die Verarbeitung, Validierung und Authentifizierung der Anmeldedaten zwingend erforderlich. Dies beinhaltet den Vergleich von Benutzername/Passwort mit einer Datenbank und die Verwaltung von Benutzer-Sessions.
+    *   **Architektur-Implikation:** Die Logik für Authentifizierung und Session-Management liegt vollständig auf dem Server. Die Kommunikation zwischen Client und Server erfolgt über HTTP(S).
+
+## 3. Technische Spezifikation
+
+Diese Spezifikation beschreibt die technische Umsetzung eines einfachen Login-Formulars, das ausschließlich mit HTML5 realisiert wird, ohne jegliche clientseitigen Frameworks oder Styling-Bibliotheken.
+
+### 3.1. Client-seitige Umsetzung (HTML5)
+
+Das Login-Formular wird durch folgende HTML-Struktur repräsentiert:
+
+```html
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <!-- KEIN CSS, KEIN JS -->
+</head>
+<body>
+
+    <h1>Login</h1>
+
+    <!--
+        Das Formular-Element kapselt die Eingabefelder und den Submit-Button.
+        'action': Gibt die URL an, an die die Formulardaten gesendet werden. Muss im Backend definiert sein.
+        'method': Gibt die HTTP-Methode an. POST ist für sensible Daten wie Passwörter zwingend erforderlich.
+    -->
+    <form action="/api/login" method="POST">
+
+        <!-- Feld für den Benutzernamen -->
+        <div>
+            <label for="username">Benutzername:</label>
+            <!--
+                'type="text"': Standard-Textfeldeingabe.
+                'id="username"': Eindeutiger Bezeichner für das Label.
+                'name="username"': Der Schlüssel, unter dem der Wert an das Backend gesendet wird.
+                'required': Stellt sicher, dass das Feld nicht leer bleiben kann (Browser-seitige Basisvalidierung).
+            -->
+            <input type="text" id="username" name="username" required>
+        </div>
+
+        <!-- Feld für das Passwort -->
+        <div>
+            <label for="password">Passwort:</label>
+            <!--
+                'type="password"': Zeigt die Eingabe als Maske (z.B. Sternchen) an und ist essenziell für Passwortfelder.
+                'id="password"': Eindeutiger Bezeichner für das Label.
+                'name="password"': Der Schlüssel, unter dem der Wert an das Backend gesendet wird.
+                'required': Stellt sicher, dass das Feld nicht leer bleiben kann.
+            -->
+            <input type="password" id="password" name="password" required>
+        </div>
+
+        <!-- Submit-Button -->
+        <div>
+            <!--
+                'type="submit"': Löst das Absenden des Formulars aus.
+            -->
+            <button type="submit">Anmelden</button>
+        </div>
+
+    </form>
+
+</body>
+</html>
+```
+
+### 3.2. Datenmodell (Client-zu-Server-Kommunikation)
+
+Die übermittelten Daten folgen dem `application/x-www-form-urlencoded` Format.
+
+*   **HTTP Methode:** `POST`
+*   **API Endpunkt:** `/api/login` (muss im Backend konfiguriert werden)
+*   **Request Body:**
+    *   Content-Type: `application/x-www-form-urlencoded`
+    *   Datenstruktur (Beispiel):
+        ```
+        username=MaxMustermann&password=s3hrGeh31m3sPasswort
+        ```
+    *   Die Schlüssel (`username`, `password`) entsprechen den `name`-Attributen der `<input>`-Elemente.
+
+### 3.3. Server-seitige Erwartungen & Logik
+
+Das Backend muss die folgenden Aufgaben erfüllen:
+
+*   **Endpoint-Bereitstellung:** Bereitstellung eines HTTP-Endpunkts unter `/api/login` (oder der spezifizierten URL), der `POST`-Anfragen akzeptiert.
+*   **Datenverarbeitung:** Empfang und Parsen der `username` und `password` Parameter aus dem Request Body.
+*   **Authentifizierung:**
+    *   Abgleich des empfangenen Benutzernamens mit den gespeicherten Benutzerdaten.
+    *   Sicheres Vergleichen des empfangenen Passworts mit dem **gehashten** Passwort des Benutzers (z.B. mittels bcrypt, Argon2). Klartext-Passwörter dürfen **niemals** in der Datenbank gespeichert werden.
+*   **Autorisierung & Session-Management:**
+    *   Nach erfolgreicher Authentifizierung: Erstellung einer serverseitigen Sitzung (z.B. durch Setzen eines Session-Cookies).
+    *   Weiterleitung (HTTP Redirect) des Nutzers zu einer geschützten Ressource (z.B. `/dashboard`).
+*   **Fehlerbehandlung:**
+    *   Bei fehlgeschlagener Authentifizierung: Rücksendung einer Fehlermeldung. Da kein JavaScript/CSS erlaubt ist, geschieht dies typischerweise durch:
+        *   Erneutes Rendern der Login-Seite mit einer integrierten, unformatierten Textmeldung (z.B. `<div>Ungültiger Benutzername oder Passwort.</div>`).
+        *   Alternativ: Weiterleitung zu einer dedizierten Fehlerseite.
+    *   Es wird empfohlen, HTTP-Statuscodes wie `401 Unauthorized` oder `400 Bad Request` für fehlgeschlagene Anmeldungen zu verwenden, die vom Server gesendet werden.
+
+### 3.4. Sicherheitsaspekte
+
+*   **Transportverschlüsselung:** Die gesamte Kommunikation muss über **HTTPS** erfolgen, um die Übertragung der Anmeldedaten zu schützen.
+*   **Passwortsicherheit:** Serverseitiges Hashing und Salting von Passwörtern ist unerlässlich.
+
+### 3.5. Offene Punkte zur Klärung
+
+*   Die genaue URL für das `action`-Attribut des Formulars muss vom Backend-Team bestätigt werden.
+*   Die spezifischen Texte für die `<label>`-Elemente ("Benutzername:", "Passwort:") sind gesetzt, können aber bei Bedarf angepasst werden.
+*   Die genaue Methode der Fehleranzeige bei fehlgeschlagener Anmeldung (erneutes Rendern der Login-Seite mit Textmeldung vs. Redirect zu Fehlerseite) sollte finalisiert werden.
+
+## 4. Akzeptanzkriterien
+
+Die folgenden Kriterien müssen erfüllt sein, damit die Aufgabe als abgeschlossen gilt:
+
+*   **AC1: Grundlegende Struktur:** Das Anmeldeformular ist ausschließlich mit validem HTML5 strukturiert.
+*   **AC2: Eingabefelder:** Es gibt separate `<input>`-Felder für Benutzername (`type="text"`, `name="username"`, `required`) und Passwort (`type="password"`, `name="password"`, `required`).
+*   **AC3: Passwortmaskierung:** Das Passwortfeld maskiert die eingegebenen Zeichen.
+*   **AC4: Submit-Button:** Ein `<button type="submit">` mit der Beschriftung "Anmelden" ist vorhanden.
+*   **AC5: Formularattribute:** Das `<form>`-Element verwendet `method="POST"` und hat ein definiertes `action`-Attribut (z.B. `/api/login`).
+*   **AC6: Keine Client-seitigen Erweiterungen:** Es werden keine CSS-Styles oder JavaScript-Frameworks/-Bibliotheken verwendet, die über die reine HTML-Struktur hinausgehen.
+*   **AC7: Erfolgreiche Übermittlung (Backend-abhängig):** Bei gültigen Daten sendet das Formular die Daten korrekt per POST an die definierte URL.
+*   **AC8: Fehlgeschlagene Übermittlung (Backend-abhängig):** Bei ungültigen Daten oder leerem Pflichtfeld wird die Übermittlung (ggf. durch Browser-Validierung) gestoppt oder das Backend signalisiert einen Fehler, was zu einer sichtbaren Rückmeldung (z.B. Textmeldung auf der Seite) führt.
+*   **AC9: Barrierefreiheit (Basis):** `<label>`-Elemente sind korrekt mit den `<input>`-Feldern über `for` und `id` verknüpft.

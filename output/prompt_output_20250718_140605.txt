@@ -1,0 +1,182 @@
+I have analyzed the provided context, including the user role, function, business context, open questions, and the current tech stack. I've also reviewed the enhanced user story and the detailed technical specifications provided. The task is to combine all this information into a single, clearly structured Markdown prompt, following the specified format: User Story, Kontext, Technische Spezifikation, Akzeptanzkriterien.
+
+My goal is to consolidate the given information into a coherent and actionable prompt for a Large Language Model (LLM) that can generate the necessary code or guide the development process for a login feature. I need to ensure all aspects are covered and presented logically.
+
+1.  **User Story:** I will start with the refined user story, outlining the role, function, and business benefit.
+2.  **Kontext:** This section will include the business context, technical details, assumptions about the tech stack, architectural context, and general conventions. This provides the necessary background for the LLM.
+3.  **Technische Spezifikation:** This part will detail the API endpoints, data models (request/response), technologies used (React, libraries, etc.), frontend implementation details (component structure, state management, API calls, error handling, routing), and specific notes on accessibility and security.
+4.  **Akzeptanzkriterien:** Finally, I will list the testable acceptance criteria in the BDD (Given-When-Then) format, covering successful and unsuccessful login scenarios, client-side validation, and accessibility aspects.
+
+I will structure the final output strictly adhering to the Markdown format requested.# Prompt: Implementierung eines Benutzeranmeldeformulars
+
+## User Story
+
+**Rolle:** Nutzer
+**Funktion:** Bereitstellung eines einfachen und barrierefreien Anmeldefeldes auf der Webseite zur Eingabe von Benutzername und Passwort, um sich erfolgreich im System zu authentifizieren und Zugang zu personalisierten Bereichen zu erhalten.
+**Geschäftlicher Nutzen:** Ermöglicht registrierten Nutzern den sicheren und effizienten Zugriff auf personalisierte Inhalte, Funktionen und Bereiche der Webseite (z.B. Benutzerprofil, Bestellhistorie, Dashboard). Eine intuitive und fehlerfreie Anmeldung ist eine Grundvoraussetzung für die Nutzerbindung und die Aktivierung des vollen Funktionsumfangs der Plattform. Ohne erfolgreiche Anmeldung bleiben personalisierte Inhalte und Funktionen für den Nutzer nicht zugänglich.
+
+## Kontext
+
+### 1. Geschäftlicher und Technischer Kontext
+
+*   **Ziel:** Implementierung eines standardmäßigen Benutzeranmeldefeldes.
+*   **Plattform:** Webanwendung, wahrscheinlich eine Single Page Application (SPA).
+*   **Kernfunktion:** Ermöglichung der Benutzerauthentifizierung über Benutzername und Passwort.
+*   **Sicherheit:** HTTPS ist zwingend erforderlich für die Datenübertragung. Passwörter werden serverseitig gehasht.
+*   **Barrierefreiheit (Accessibility - a11y):** Hohe Priorität für die Einhaltung von WCAG-Richtlinien, insbesondere bei Formularelementen.
+
+### 2. Annahmen zum Tech-Stack und zur Architektur
+
+*   **Frontend Framework:** React.js
+*   **UI-Bibliothek:** Eine etablierte Bibliothek wie Material-UI (MUI) oder Ant Design wird verwendet.
+*   **Styling:** CSS-in-JS (z.B. Styled Components) oder CSS Modules.
+*   **State Management:** React Context API oder eine Bibliothek wie Zustand/Redux.
+*   **Routing:** React Router für die Navigation.
+*   **API-Kommunikation:** RESTful API über `fetch` oder `axios`.
+*   **Backend-Authentifizierung:** Erfolgt über einen definierten API-Endpunkt.
+
+### 3. Konventionen
+
+*   **Formularübermittlung:** HTTP `POST`-Methode.
+*   **Semantisches HTML:** Verwendung von `<form>`, `<label>`, `<input>`, `<button>`.
+*   **Benennung:** Konsistente Feldnamen (`username`, `password`).
+*   **Fehlerbehandlung:** Sowohl clientseitige Validierung als auch Verarbeitung von Backend-Fehlermeldungen.
+
+## Technische Spezifikation
+
+### 1. API Endpunkte
+
+*   **Authentifizierung:**
+    *   **Endpunkt:** `/api/auth/login`
+    *   **HTTP-Methode:** `POST`
+    *   **Zweck:** Nimmt Anmeldedaten entgegen, authentifiziert den Benutzer und gibt bei Erfolg ein Authentifizierungstoken zurück.
+    *   **Sicherheit:** Muss über HTTPS aufgerufen werden.
+
+### 2. Datenmodelle
+
+*   **Anforderungs-Body (`POST /api/auth/login`):**
+    ```json
+    {
+      "username": "string",
+      "password": "string"
+    }
+    ```
+*   **Erfolgs-Antwort (Status 200 OK):**
+    ```json
+    {
+      "success": true,
+      "token": "string", // JWT oder ähnliches
+      "user": { "id": "string", "username": "string" } // Optional
+    }
+    ```
+*   **Fehler-Antwort (Status 400 Bad Request / 401 Unauthorized):**
+    ```json
+    {
+      "success": false,
+      "message": "string" // z.B. "Ungültige Anmeldedaten."
+    }
+    ```
+
+### 3. Frontend-Implementierung (React)
+
+*   **Komponente:** `LoginForm` (z.B. `src/components/Auth/LoginForm.jsx`).
+*   **Struktur (Beispiel mit MUI):**
+    ```jsx
+    <Box component="form" onSubmit={handleSubmit} sx={{ /* ... styling */ }}>
+      <Typography variant="h6">Anmelden</Typography>
+      <TextField
+        id="username"
+        name="username"
+        label="Benutzername"
+        value={username}
+        onChange={/* ... update state */}
+        required
+        // ... andere props wie error, helperText, InputLabelProps={{ htmlFor: 'username' }}
+      />
+      <TextField
+        id="password"
+        name="password"
+        label="Passwort"
+        type="password"
+        value={password}
+        onChange={/* ... update state */}
+        required
+        // ... andere props wie error, helperText, InputLabelProps={{ htmlFor: 'password' }}
+      />
+      {/* Bereich für Fehlermeldungen */}
+      {error && <Typography color="error" role="alert" aria-live="polite">{error}</Typography>}
+      <Button type="submit" variant="contained" disabled={loading}>
+        {loading ? 'Prüfe...' : 'Anmelden'}
+      </Button>
+    </Box>
+    ```
+*   **Formular-Handling:**
+    *   Verwendung von `useState` für `username`, `password`, `error`, `loading`.
+    *   `handleSubmit`-Funktion mit `event.preventDefault()`.
+    *   Clientseitige Validierung (mindestens für Pflichtfelder).
+    *   API-Aufruf (`fetch` oder `axios`) an `/api/auth/login`.
+    *   Verarbeitung von Erfolgs- und Fehlerantworten.
+    *   Speicherung des Tokens im `localStorage` (oder sicherere Methode).
+    *   Weiterleitung mit `useNavigate()` zu `/dashboard` oder einer ursprünglich angeforderten Seite.
+*   **Fehleranzeige:**
+    *   Dynamische Anzeige von Fehlermeldungen in dedizierten Elementen (z.B. `Typography` mit `role="alert"`, `aria-live="polite"`).
+    *   Nutzung der `error`- und `helperText`-Props von `TextField`.
+
+### 3. Barrierefreiheit und Sicherheit
+
+*   **Barrierefreiheit:**
+    *   Korrekte Verknüpfung von `<label>` (`for`) und `<input>` (`id`).
+    *   Verwendung von `placeholder`-Texten.
+    *   Zugängliche Fehleranzeige (`role="alert"`, `aria-live="polite"`).
+    *   Sicherstellung von Farbkontrasten und Tastaturbedienbarkeit.
+*   **Sicherheit:**
+    *   Verwendung von `POST` für die Datenübermittlung.
+    *   Zwingende HTTPS-Nutzung.
+    *   Keine Speicherung von Passwörtern im Klartext im Frontend.
+    *   Serverseitige Validierung ist unerlässlich.
+    *   Schutz vor XSS und CSRF.
+
+### 4. Platzierung und Weiterleitung
+
+*   **Platzierung:** Dedizierte Login-Seite unter `/login`. Optional: Login-Modal über Link im Header aufrufbar.
+*   **Weiterleitung:** Nach erfolgreicher Anmeldung zu `/dashboard` oder zur ursprünglich angeforderten geschützten Seite.
+
+## Akzeptanzkriterien
+
+**Feature: Benutzeranmeldung**
+
+**Szenario: Erfolgreiche Anmeldung mit gültigen Anmeldedaten**
+*   **Gegeben sei** der Benutzer auf der Anmeldeseite.
+*   **Und** der `/api/auth/login`-Endpunkt antwortet erfolgreich (200 OK) mit einem Token.
+*   **Wenn** der Benutzer gültige Anmeldedaten eingibt und auf "Anmelden" klickt.
+*   **Dann** erfolgt ein `POST`-Aufruf an `/api/auth/login`.
+*   **Und** der Token wird im `localStorage` gespeichert.
+*   **Und** der Benutzer wird zur `/dashboard`-Seite weitergeleitet.
+
+**Szenario: Fehlgeschlagene Anmeldung mit ungültigen Anmeldedaten**
+*   **Gegeben sei** der Benutzer auf der Anmeldeseite.
+*   **Und** der `/api/auth/login`-Endpunkt antwortet mit einem Fehler (z.B. 401 Unauthorized) und einer Fehlermeldung.
+*   **Wenn** der Benutzer ungültige Anmeldedaten eingibt und auf "Anmelden" klickt.
+*   **Dann** erfolgt ein `POST`-Aufruf an `/api/auth/login`.
+*   **Und** die Fehlermeldung "Ungültige Anmeldedaten." wird sichtbar angezeigt.
+*   **Und** der Benutzer verbleibt auf der Anmeldeseite.
+*   **Und** kein Token wird gespeichert.
+
+**Szenario: Fehlgeschlagene Anmeldung wegen leerer Pflichtfelder (Client-seitige Validierung)**
+*   **Gegeben sei** der Benutzer auf der Anmeldeseite.
+*   **Wenn** der Benutzer versucht, sich ohne Eingabe eines Benutzernamens und/oder Passworts anzumelden.
+*   **Dann** wird eine Fehlermeldung wie "Dieses Feld ist erforderlich" neben dem/den leeren Feld(ern) angezeigt.
+*   **Und** der API-Aufruf wird nicht ausgelöst.
+*   **Und** der Benutzer verbleibt auf der Anmeldeseite.
+
+**Szenario: Korrekte Verknüpfung von Labels und Input-Feldern (Barrierefreiheit)**
+*   **Gegeben sei** das Anmeldeformular wird gerendert.
+*   **Wenn** das Formular angezeigt wird.
+*   **Dann** hat das Label für "Benutzername" ein `for`-Attribut, das auf `id="username"` des Input-Feldes verweist.
+*   **Und** das Label für "Passwort" hat ein `for`-Attribut, das auf `id="password"` des Input-Feldes verweist.
+
+**Szenario: Zugängliche Anzeige von Fehlermeldungen (Barrierefreiheit)**
+*   **Gegeben sei** ein Anmeldefehler tritt auf.
+*   **Wenn** die Fehlermeldung angezeigt wird.
+*   **Dann** besitzt die Fehlermeldung `role="alert"` und `aria-live="polite"`.
+*   **Und** die Fehlermeldung ist visuell klar erkennbar.

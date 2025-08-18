@@ -1,211 +1,377 @@
 import os
+
+os.environ["CREWAI_TELEMETRY_ENABLED"] = "false"  # hard opt-out
+os.environ["OTEL_SDK_DISABLED"] = "true"          # disable OpenTelemetry globally
+
+import json
+import re
+from typing import List, Dict
+
 from crewai import Agent, Task, Crew, Process, LLM
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
+from datetime import date, datetime
 
-# Erstellen des Output-Verzeichnisses, falls es nicht existiert
+timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+# -----------------------------------------------------------------------------
+# Environment & output setup
+# -----------------------------------------------------------------------------
 
 os.environ["CREWAI_TELEMETRY_ENABLED"] = "false"
 if not os.path.exists("output"):
     os.makedirs("output")
 
 load_dotenv()
+GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
+if not GEMINI_API_KEY:
+    raise ValueError(
+        "GOOGLE_API_KEY environment variable not set. Please set it in your .env file."
+    )
 
-gemini_api_key = os.getenv("GOOGLE_API_KEY")
-
-if not gemini_api_key:
-    raise ValueError("GOOGLE_API_KEY environment variable not set. Please set it in your .env file.")
-
-# Konfiguration des LLM: Gemini 1.5 Flash
-# Stellen Sie sicher, dass Ihr Google API Key in den Umgebungsvariablen gesetzt ist.
-# z.B. os.environ["GOOGLE_API_KEY"] = "DEIN_API_KEY"
+# Primary LLM for CrewAI agents (Gemini 2.5 Flash via CrewAI provider spec)
 llm = LLM(
     model="gemini/gemini-2.5-flash",
-    api_key=gemini_api_key,
-    providers=["google"]
+    api_key=GEMINI_API_KEY,
+    providers=["google"],
 )
 
-#================================================================================
-# 1. Definition der Agenten
-#================================================================================
+# Lightweight chat model used ONLY for optional direct invocations if needed.
+# (Kept here for future extensions; current flow uses a dedicated Crew step.)
+chat_llm = ChatGoogleGenerativeAI(
+    model="gemini-1.5-flash",
+    google_api_key=GEMINI_API_KEY,
+    temperature=0.2,
+)
+
+# -----------------------------------------------------------------------------
+# Helper utilities
+# -----------------------------------------------------------------------------
+
+def extract_json(text: str) -> Dict:
+    """Robustly extract the first JSON object from a string."""
+    try:
+        return json.loads(text)
+    except Exception:
+        # Try to snip the outermost JSON block
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            snippet = text[start : end + 1]
+            try:
+                return json.loads(snippet)
+            except Exception:
+                pass
+    return {}
+
+
+def interactive_clarification_round(initial_story: str, max_questions: int = 6) -> str:
+    """
+    Runs a pre-crew clarification step:
+    1) A Clarifier Agent proposes targeted questions as JSON.
+    2) We ask the user for answers in the CLI.
+    3) We append Q&A to the original input and return the enriched prompt.
+    """
+    # ---------------------------------------------------------------------
+    # Build a minimal one-task crew that proposes clarification questions.
+    # ---------------------------------------------------------------------
+    clarifier = Agent(
+        role="Requirements Clarifier",
+        goal=(
+            "Identify missing details, ambiguities, or risks in the user story and ask only the most \n"
+            "impactful clarification questions. Always work and respond in English."
+        ),
+        backstory=(
+            "Senior Business Analyst with strong requirements engineering background. \n"
+            "You are concise and pragmatic. You never add assumptions; you ask. \n"
+            "Language policy: Always think and respond in English."
+        ),
+        allow_delegation=False,
+        llm=llm,
+        verbose=False,
+        max_iter=1,
+    )
+
+    clarification_task = Task(
+        description=(
+            "Analyze the following user story and only if necessary, propose clarification questions.\n"
+            "Return STRICT JSON with this shape: {\"questions\": [\"...\"]}.\n"
+            f"Limit to at most {max_questions} short, concrete questions.\n\n"
+            "User Story:\n"
+            "---\n{user_story_input}\n---\n\n"
+            "Do not add explanations. If everything is clear, return {\"questions\": []}."
+        ),
+        expected_output=(
+            "A single JSON object with a 'questions' array (possibly empty)."
+        ),
+        agent=clarifier,
+    )
+
+    clarification_crew = Crew(
+        agents=[clarifier],
+        tasks=[clarification_task],
+        process=Process.sequential,
+        manager_llm=llm,
+        verbose=False,
+    )
+
+    result = clarification_crew.kickoff(inputs={"user_story_input": initial_story})
+    data = extract_json(str(result)) or {"questions": []}
+    questions: List[str] = data.get("questions") or []
+
+    if not questions:
+        return initial_story
+
+    print("\n— Clarification needed — Please answer the following:")
+    answers: List[Dict[str, str]] = []
+    for idx, q in enumerate(questions, start=1):
+        print(f"Q{idx}: {q}")
+        a = input("Your answer: ").strip()
+        answers.append({"question": q, "answer": a})
+
+    clarifications_md = ["\n\nAdditional Clarifications (from interactive Q&A):\n"]
+    for pair in answers:
+        clarifications_md.append(f"- Q: {pair['question']}\n  A: {pair['answer']}")
+
+    return initial_story + "\n" + "\n".join(clarifications_md)
+
+
+# -----------------------------------------------------------------------------
+# Agent definitions (English-only policy)
+# -----------------------------------------------------------------------------
 
 manager = Agent(
-    role="Crew-Manager",
-    goal="Koordiniert alle Spezialagenten, plant den Ablauf und stellt sicher, dass am Ende ein validierter Markdown-GitHub-Issue vorliegt.",
-    backstory="Erfahrener Agile Coach, vertraut mit Scrum-Flows und AI-Orchestration. Priorisiert Effizienz, Qualität und Risikominimierung.",
+    role="Crew Manager",
+    goal=(
+        "Coordinate all specialist agents, plan the flow, and ensure that the final output is a validated,\n"
+        "well-structured GitHub Issue in Markdown. Always produce content in English."
+    ),
+    backstory=(
+        "An experienced Agile Coach familiar with Scrum flows and AI orchestration. \n"
+        "You prioritize efficiency, quality, and risk mitigation. \n"
+        "Language policy: Always think and respond in English."
+    ),
     allow_delegation=True,
     llm=llm,
     max_iter=3,
-    verbose=True
+    verbose=True,
 )
 
 product_owner = Agent(
     role="Product Owner",
-    goal="Wandelt Rohtext-Anforderungen in ein StorySkeleton-JSON mit title, as_a, i_want, so_that.",
-    backstory="Stellt die Business-Perspektive sicher und achtet auf verständliche Sprache ohne Fachjargon.",
+    goal=(
+        "Transform raw requirements into a Story Skeleton JSON with keys: title, as_a, i_want, so_that. \n"
+        "Always answer in English."
+    ),
+    backstory=(
+        "Ensures the business perspective and uses clear, jargon-free language. \n"
+        "Language policy: Always think and respond in English."
+    ),
     allow_delegation=False,
     llm=llm,
     max_iter=2,
-    verbose=True
+    verbose=True,
 )
 
 story_architect = Agent(
     role="Story Architect",
-    goal="Erstellt die vollständige User Story inkl. Gherkin-Akzeptanzkriterien und vollständiger Definition of Done.",
-    backstory="Senior Requirements Engineer mit Fokus auf klare, testbare Akzeptanzkriterien.",
+    goal=(
+        "Create the complete user story with Gherkin acceptance criteria (Given/When/Then) and a comprehensive Definition of Done."
+    ),
+    backstory=(
+        "Senior Requirements Engineer focused on clear, testable acceptance criteria. \n"
+        "Language policy: Always think and respond in English."
+    ),
     allow_delegation=False,
     llm=llm,
-    verbose=True
+    verbose=True,
 )
 
 sprint_planner = Agent(
     role="Sprint Planner",
-    goal="Zerlegt die Story in Sub-Tasks, weist Story-Points zu und erstellt eine Ready-for-Dev-Checkliste.",
-    backstory="Erfahrung in Scrum-Poker, Aufwandsschätzung und Task-Breakdown.",
+    goal=(
+        "Break down the story into sub-tasks, estimate Story Points, and create a Ready-for-Dev checklist."
+    ),
+    backstory=(
+        "Experienced in Scrum Poker, effort estimation, and task breakdown. \n"
+        "Language policy: Always think and respond in English."
+    ),
     allow_delegation=False,
     llm=llm,
-    verbose=True
+    verbose=True,
 )
 
 qa_analyst = Agent(
     role="QA Analyst",
-    goal="Prüft Klarheit, Gherkin-Syntax und Ambiguitäten; vergibt Score und Feedback.",
-    backstory="Strenger Qualitätsprüfer mit Rubric-Katalog und Gherkin-Lint-Erfahrung.",
+    goal=(
+        "Check clarity, Gherkin syntax, completeness, and ambiguities; assign a quality score and provide feedback."
+    ),
+    backstory=(
+        "Strict quality reviewer with a rubric catalog and Gherkin lint experience. \n"
+        "Language policy: Always think and respond in English."
+    ),
     allow_delegation=False,
     llm=llm,
     max_iter=2,
-    verbose=True
+    verbose=True,
 )
 
 issue_formatter = Agent(
     role="Issue Formatter",
-    goal="Rendert den validierten Inhalt als GitHub-Markdown-Issue, bereit zum Copy-Paste.",
-    backstory="Markdown-Guru, kennt GitHub-Flavour und Strukturkonventionen für User Stories.",
+    goal=(
+        "Render the validated content as a copy-paste ready GitHub Issue in Markdown with suggested labels."
+    ),
+    backstory=(
+        "Markdown expert, proficient in GitHub Flavored Markdown and common user story structures. \n"
+        "Language policy: Always think and respond in English."
+    ),
     allow_delegation=False,
     llm=llm,
-    verbose=True
+    verbose=True,
 )
 
+# -----------------------------------------------------------------------------
+# Task definitions (English-only prompts)
+# -----------------------------------------------------------------------------
 
-#================================================================================
-# 2. Definition der Tasks
-#================================================================================
-
-# Task für den Product Owner: Extrahiert die Basis-Story aus dem Input.
 product_owner_task = Task(
     description=(
-        "Analysiere die folgende User-Story-Anforderung und extrahiere die Kernkomponenten. "
-        "Formatiere das Ergebnis ausschließlich als JSON-Objekt mit den Schlüsseln 'title', 'as_a', 'i_want' und 'so_that'.\n\n"
-        "User-Story-Anforderung:\n"
-        "---_---_---\n"
-        "{user_story_input}"
-        "---_---_---"
+        "Analyze the following user story requirement and extract its core components.\n"
+        "Output ONLY a JSON object with the keys 'title', 'as_a', 'i_want', 'so_that'.\n\n"
+        "User Story Requirement:\n"
+        "---\n{user_story_input}\n---"
     ),
-    expected_output="Ein einzelnes JSON-Objekt, das die User Story strukturiert darstellt. Beispiel: {\"title\": \"...\", \"as_a\": \"...\", \"i_want\": \"...\", \"so_that\": \"...\"}",
+    expected_output=(
+        "A single JSON object representing the user story skeleton, e.g. {\"title\": \"...\", \"as_a\": \"...\", \"i_want\": \"...\", \"so_that\": \"...\"}"
+    ),
     agent=product_owner,
-    #output_json=True # Stellt sicher, dass der Output als JSON geparst wird
 )
 
-# Task für den Story Architect: Baut die Story mit Akzeptanzkriterien aus.
 story_architect_task = Task(
     description=(
-        "Erweitere das bereitgestellte Story-Skelett um detaillierte Akzeptanzkriterien im Gherkin-Format (Given/When/Then) "
-        "und formuliere eine passende 'Definition of Done' (DoD). "
-        "Gib das Ergebnis als JSON-Objekt mit den Schlüsseln 'story_markdown', 'acceptance_criteria' und 'definition_of_done' zurück."
+        "Extend the provided story skeleton with detailed Gherkin acceptance criteria (Given/When/Then) and a suitable \n"
+        "Definition of Done (DoD). Return a JSON object with keys: 'story_markdown', 'acceptance_criteria', 'definition_of_done'."
     ),
-    expected_output="Ein JSON-Objekt, das die formatierte Story, Gherkin-Kriterien und die DoD enthält.",
-    context=[product_owner_task], # Nutzt den Output des PO-Tasks
+    expected_output=(
+        "A JSON object containing the formatted story, acceptance criteria, and DoD."
+    ),
+    context=[product_owner_task],
     agent=story_architect,
-    #output_json=True
 )
 
-# Task für den Sprint Planner: Bricht die Story in technische Tasks herunter.
 sprint_planner_task = Task(
     description=(
-        "Basierend auf der User Story und den Akzeptanzkriterien, erstelle eine Liste von technischen Sub-Tasks. "
-        "Schätze für jeden Task die Komplexität in Story Points (z.B. 1, 2, 3, 5). "
-        "Erstelle zusätzlich eine 'Ready for Dev'-Checkliste. "
-        "Formatiere das Ergebnis als JSON-Objekt mit den Schlüsseln 'tasks' (eine Liste von Objekten mit 'desc' und 'points') und 'checklist' (eine Liste von Strings)."
+        "Based on the user story and acceptance criteria, create a list of technical sub-tasks. For each sub-task, estimate Story Points \n"
+        "(e.g., 1, 2, 3, 5). Also provide a 'Ready for Dev' checklist. Output a JSON object with keys: \n"
+        "'tasks' (list of objects with 'desc' and 'points') and 'checklist' (list of strings)."
     ),
-    expected_output="Ein JSON-Objekt mit einer Liste von Sub-Tasks inkl. Story Points und einer Checkliste.",
-    context=[story_architect_task], # Nutzt den Output des Architect-Tasks
+    expected_output=(
+        "A JSON object with sub-tasks including story points and a checklist."
+    ),
+    context=[story_architect_task],
     agent=sprint_planner,
-    #output_json=True
 )
 
-# Task für den QA Analyst: Überprüft die bisherigen Ergebnisse auf Qualität.
 qa_analyst_task = Task(
     description=(
-        "Überprüfe die erstellte User Story, die Akzeptanzkriterien und die Sub-Tasks auf Klarheit, Vollständigkeit und potentielle Widersprüche. "
-        "Bewerte die Qualität auf einer Skala von 0-100. Identifiziere alle Probleme und gib an, ob diese 'blocking' für die Entwicklung sind. "
-        "Formatiere das Ergebnis als JSON-Objekt mit den Schlüsseln 'score', 'findings' und 'blocking'."
+        "Review the created user story, acceptance criteria, and sub-tasks for clarity, completeness, and potential contradictions. \n"
+        "Score the overall quality on a 0-100 scale. Identify issues and specify whether each is 'blocking'. \n"
+        "Return a JSON object with keys 'score', 'findings', and 'blocking'."
     ),
-    expected_output="Ein JSON-Objekt mit einem Qualitätsscore, einer Liste von Findings und einem Blocking-Status.",
-    context=[story_architect_task, sprint_planner_task], # Nutzt mehrere vorherige Outputs
+    expected_output=(
+        "A JSON object with a quality score, a list of findings, and a blocking status."
+    ),
+    context=[story_architect_task, sprint_planner_task],
     agent=qa_analyst,
-    #output_json=True
 )
 
-
-# Task für den Issue Formatter: Erstellt das finale Markdown-Dokument.
 issue_formatter_task = Task(
     description=(
-        "Kombiniere alle vorherigen Informationen (User Story, Akzeptanzkriterien, Sub-Tasks, DoD) zu einem finalen GitHub-Issue im Markdown-Format. "
-        "Stelle sicher, dass die Formatierung exakt den GitHub-Konventionen entspricht und übersichtlich ist. "
-        "Füge am Ende einen Vorschlag für passende Labels hinzu."
+        "Combine all prior information (User Story, Acceptance Criteria, Sub-Tasks, DoD) into a final GitHub Issue in Markdown.\n"
+        "Ensure the formatting matches GitHub conventions and is easy to read. Add suggested labels at the end."
     ),
-    expected_output="Ein einzelner, sauber formatierter Markdown-Textblock, der das gesamte GitHub-Issue darstellt.",
-    context=[product_owner_task, story_architect_task, sprint_planner_task, qa_analyst_task], # Nutzt alle relevanten Outputs
+    expected_output=(
+        "A single, cleanly formatted Markdown block representing the entire GitHub Issue."
+    ),
+    context=[product_owner_task, story_architect_task, sprint_planner_task, qa_analyst_task],
     agent=issue_formatter,
-    #output_file="output/github_issue.txt" # Speichert das Ergebnis direkt in eine Datei
+    output_file=F"output/github_issue-{timestamp}.md",
 )
 
+# -----------------------------------------------------------------------------
+# Crew assembly
+# -----------------------------------------------------------------------------
 
-#================================================================================
-# 3. Zusammenstellung und Ausführung der Crew
-#================================================================================
-
-# Erstellen des Crew-Objekts mit den Agenten und Tasks
 github_issue_crew = Crew(
-    agents=[manager, product_owner, story_architect, sprint_planner, qa_analyst, issue_formatter],
-    tasks=[product_owner_task, story_architect_task, sprint_planner_task, qa_analyst_task, issue_formatter_task],
-    process=Process.sequential,  # Die Aufgaben werden nacheinander ausgeführt
-    manager_llm=llm, # Der Manager nutzt ebenfalls Gemini
-    verbose=True
+    agents=[
+        manager,
+        product_owner,
+        story_architect,
+        sprint_planner,
+        qa_analyst,
+        issue_formatter,
+    ],
+    tasks=[
+        product_owner_task,
+        story_architect_task,
+        sprint_planner_task,
+        qa_analyst_task,
+        issue_formatter_task,
+    ],
+    process=Process.sequential,
+    manager_llm=llm,
+    verbose=True,
 )
 
-user_story_input = """
-As an administrator,
-I want the user entity to include a date of birth and occupation field,
-so that I can store and view additional personal information about each user.
+# -----------------------------------------------------------------------------
+# Example usage (CLI-friendly)
+# -----------------------------------------------------------------------------
 
-Acceptance Criteria:
+def main():
+    print("\n=== CrewAI: User Story to GitHub Issue (English-only, with CLI clarifications) ===\n")
+    print("Paste your user story below. End input with a single line containing only END.\n")
 
-The user model includes a dateOfBirth field (date format, e.g., yyyy-MM-dd).
-The user model includes an occupation field (string).
-Both fields are displayed when retrieving user details via API.
-It is possible to set both fields when creating or updating a user.
-"""
+    # Read multi-line user input (fallback to a default example if nothing is provided)
+    lines: List[str] = []
+    while True:
+        try:
+            line = input()
+        except EOFError:
+            break
+        if line.strip() == "END":
+            break
+        lines.append(line)
+
+    if lines:
+        user_story_input = "\n".join(lines).strip()
+    else:
+        user_story_input = (
+            "As an administrator, I want the user entity to include a date of birth and occupation field, "
+            "so that I can store and view additional personal information about each user.\n\n"
+            "Acceptance Criteria:\n"
+            "- The user model includes a dateOfBirth field (ISO date, e.g., yyyy-MM-dd).\n"
+            "- The user model includes an occupation field (string).\n"
+            "- Both fields are displayed when retrieving user details via API.\n"
+            "- It is possible to set both fields when creating or updating a user.\n"
+        )
+        print("(Using default example. Provide your own next time to override.)\n")
+
+    # Interactive clarification phase
+    final_input = interactive_clarification_round(user_story_input)
+
+    # Kick off the main crew
+    result = github_issue_crew.kickoff(inputs={"user_story_input": final_input})
+
+    # Persist full result as well (in addition to issue_formatter_task's output_file)
+    with open(f"output/final_result-{timestamp}.md", "w", encoding="utf-8") as f:
+        f.write(str(result))
+
+    print("\n\n##################################################")
+    print("Crew process finished successfully!")
+    print("Primary issue saved to 'output/github_issue.md'.")
+    print("Full run output saved to 'output/final_result.md'.")
+    print("##################################################\n")
 
 
-result = github_issue_crew.kickoff(inputs={'user_story_input': user_story_input})
-
-def save_output_to_file(filename, content):
-    """Speichert den gegebenen Inhalt in der angegebenen Datei."""
-    try:
-        with open(filename, 'w', encoding='utf-8') as f:
-            f.write(content)
-        print(f"\nInhalt erfolgreich in '{filename}' gespeichert.")
-    except Exception as e:
-        print(f"\nFehler beim Speichern der Datei: {e}")
-
-save_output_to_file("output/final_kickoff_result1.md", str(result))
-
-
-
-print("\n\n##################################################")
-print("Crew-Prozess erfolgreich abgeschlossen!")
-print(f"Das finale GitHub-Issue wurde in der Datei 'output/github_issue.txt' gespeichert.")
-print("##################################################")
-print("\nInhalt des erstellten Issues:")
-print(result)
+if __name__ == "__main__":
+    main()

@@ -1,12 +1,10 @@
 import os
+import json
 
 os.environ["CREWAI_TELEMETRY_ENABLED"] = "false"  # hard opt-out
 os.environ["OTEL_SDK_DISABLED"] = "true"          # disable OpenTelemetry globally
 
-import json
-import re
 from typing import List, Dict
-
 from crewai import Agent, Task, Crew, Process, LLM
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
@@ -34,14 +32,6 @@ llm = LLM(
     model="gemini/gemini-2.5-flash",
     api_key=GEMINI_API_KEY,
     providers=["google"],
-)
-
-# Lightweight chat model used ONLY for optional direct invocations if needed.
-# (Kept here for future extensions; current flow uses a dedicated Crew step.)
-chat_llm = ChatGoogleGenerativeAI(
-    model="gemini-1.5-flash",
-    google_api_key=GEMINI_API_KEY,
-    temperature=0.2,
 )
 
 # -----------------------------------------------------------------------------
@@ -346,7 +336,7 @@ def main():
         user_story_input = "\n".join(lines).strip()
     else:
         user_story_input = (
-            "As an administrator, I want the user entity to include a date of birth and occupation field, "
+            "As an administrator, I want the user entity to include a date of birth and occupation mandatory field, "
             "so that I can store and view additional personal information about each user.\n\n"
             "Acceptance Criteria:\n"
             "- The user model includes a dateOfBirth field (ISO date, e.g., yyyy-MM-dd).\n"

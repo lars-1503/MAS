@@ -127,7 +127,7 @@ def interactive_clarification_round(initial_story: str, max_questions: int = 6) 
 
 
 # -----------------------------------------------------------------------------
-# Agent definitions (English-only policy)
+# Agent definitions
 # -----------------------------------------------------------------------------
 
 manager = Agent(
@@ -221,7 +221,7 @@ issue_formatter = Agent(
 )
 
 # -----------------------------------------------------------------------------
-# Task definitions (English-only prompts)
+# Task definitions
 # -----------------------------------------------------------------------------
 
 product_owner_task = Task(
@@ -235,6 +235,7 @@ product_owner_task = Task(
         "A single JSON object representing the user story skeleton, e.g. {\"title\": \"...\", \"as_a\": \"...\", \"i_want\": \"...\", \"so_that\": \"...\"}"
     ),
     agent=product_owner,
+    human_input=True,
 )
 
 story_architect_task = Task(
@@ -247,6 +248,7 @@ story_architect_task = Task(
     ),
     context=[product_owner_task],
     agent=story_architect,
+    human_input=True,
 )
 
 sprint_planner_task = Task(
@@ -260,6 +262,7 @@ sprint_planner_task = Task(
     ),
     context=[story_architect_task],
     agent=sprint_planner,
+    human_input=True,
 )
 
 qa_analyst_task = Task(
@@ -273,6 +276,7 @@ qa_analyst_task = Task(
     ),
     context=[story_architect_task, sprint_planner_task],
     agent=qa_analyst,
+    human_input=True,
 )
 
 issue_formatter_task = Task(
@@ -314,7 +318,7 @@ github_issue_crew = Crew(
 )
 
 # -----------------------------------------------------------------------------
-# Example usage (CLI-friendly)
+# Example usage
 # -----------------------------------------------------------------------------
 
 def main():

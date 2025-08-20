@@ -244,7 +244,7 @@ story_architect_task = Task(
         "Definition of Done (DoD). Return a JSON object with keys: 'story_markdown', 'acceptance_criteria', 'definition_of_done'."
     ),
     expected_output=(
-        "A JSON object containing the formatted story, acceptance criteria, and DoD."
+        "A JSON object containing the formatted story, acceptance criteria, and Definition of Done."
     ),
     context=[product_owner_task],
     agent=story_architect,
